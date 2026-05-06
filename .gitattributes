@@ -1,0 +1,8 @@
+# Shell scripts and Python hooks are executed by Linux containers.
+# Force LF so Windows checkouts (core.autocrlf=true) don't break the
+# hook dispatch path — see Molecule-AI/molecule-core#507 where CRLF
+# line endings made claude-code try to exec `session-start-context.py\r`
+# and the SessionStart hook failed silently, producing
+# "(no response generated)" on every agent A2A call.
+*.sh text eol=lf
+*.py text eol=lf
