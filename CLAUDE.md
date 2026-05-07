@@ -63,7 +63,7 @@ learnings to load via workspace settings:
 ### Setup
 
 ```bash
-git clone https://github.com/Molecule-AI/molecule-ai-plugin-molecule-session-context.git
+git clone https://git.moleculesai.app/molecule-ai/molecule-ai-plugin-molecule-session-context.git
 cd molecule-ai-plugin-molecule-session-context
 
 # YAML validation
