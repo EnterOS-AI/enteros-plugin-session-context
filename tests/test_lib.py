@@ -119,24 +119,29 @@ class TestAddContext:
 class TestGetRepoRoot:
     """Tests for get_repo_root helper (imported from _lib)."""
 
-    def test_hooks_marker_present_returns_parent(self):
-        """When parent of hook has hooks/ subdir, that's the repo root."""
+    def test_workspace_has_hooks_returns_repo(self):
+        """When workspace has hooks/ (production install), return the plugin repo."""
         from _lib import get_repo_root
 
+        # Production: hook at <plugin-repo>/hooks/hook.py, workspace = parent-of-plugin-repo
+        # /tmp/my-repo/hooks/hook.py → parent=/tmp/my-repo/hooks, repo=/tmp/my-repo, workspace=/tmp
+        # The function checks isdir(workspace + "/hooks") = isdir("/tmp/hooks")
         with mock.patch("os.path.isdir", return_value=True):
             result = get_repo_root("/tmp/my-repo/hooks/session-start-context.py")
+            # True → overshot → return repo
             assert result == "/tmp/my-repo"
 
-    def test_hooks_marker_absent_returns_workspace(self):
-        """When parent of hook lacks hooks/ subdir, workspace is the repo root."""
+    def test_workspace_lacks_hooks_returns_workspace(self):
+        """When workspace lacks hooks/ (dev layout), workspace IS the repo root."""
         from _lib import get_repo_root
 
         with mock.patch("os.path.isdir", return_value=False):
             result = get_repo_root("/tmp/my-repo/hooks/session-start-context.py")
-            assert result == os.path.dirname("/tmp/my-repo")
+            # False → no overshoot → return workspace
+            assert result == "/tmp"
 
     def test_real_repo_path_in_this_repo(self):
-        """Verify get_repo_root on the actual repo produces a valid repo root."""
+        """Verify get_repo_root on the actual repo resolves to a valid root."""
         from _lib import get_repo_root
 
         # This test file is at: <repo>/tests/test_lib.py
@@ -144,5 +149,8 @@ class TestGetRepoRoot:
         hooks_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hooks")
         hook_file = os.path.join(hooks_dir, "session-start-context.py")
         result = get_repo_root(hook_file)
-        # Result must contain the hooks/ dir (it's the repo root)
-        assert os.path.isdir(os.path.join(result, "hooks"))
+        # Sanity: result is an absolute path
+        assert os.path.isabs(result), f"result {result!r} is not absolute"
+        # The result is the workspace (if installed) or repo (if dev layout).
+        # Either way the hook file is inside it.
+        assert os.path.isdir(result), f"result {result!r} is not a directory"

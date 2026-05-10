@@ -9,20 +9,31 @@ import sys
 
 
 def get_repo_root(hook_file: str) -> str:
-    """Return the repo root given an absolute hook script path.
+    """Return the repo root given a hook's __file__ path.
 
-    When Claude Code invokes a hook via absolute path, __file__ resolves to
-    e.g. /path/to/repo/hooks/session-start-context.py. Three dirname() calls
-    from there land at the workspace parent (one level above the repo), not the
-    repo root. We detect this overshoot by checking for the hooks/ marker.
+    The plugin is installed at <repo>/hooks/<hook>.py. We walk up three levels
+    from __file__ to find the workspace root: hooks/ → repo/ → workspace/.
+    When __file__ is absolute (Claude Code invokes hooks with absolute paths),
+    the naive dirname chain overshoots by one level, so we detect this by
+    checking whether the resolved workspace contains a 'hooks/' subdirectory.
+
+    - Normal layout (plugin installed in workspace): repo = <workspace>/<plugin>/.
+      workspace = <workspace>/. If workspace has hooks/, we've walked too far
+      and the actual repo is one level deeper → return repo.
+    - Dev layout (plugin checked out directly): repo = workspace.
+      workspace = parent-of-repo, which lacks hooks/ → workspace is right.
     """
     abs_hook = os.path.abspath(hook_file)
     parent = os.path.dirname(abs_hook)          # hooks/
     repo = os.path.dirname(parent)              # repo/
     workspace = os.path.dirname(repo)           # workspace/ (parent of repo)
-    # If parent still has hooks/ dir, we haven't overshot — return repo.
-    # Otherwise the workspace level is the repo root.
-    if os.path.isdir(os.path.join(repo, "hooks")):
+
+    # Detect overshoot by checking whether the resolved workspace contains
+    # a 'hooks/' subdirectory. In a normal install, the workspace is the parent
+    # of the plugin repo and has no hooks/; finding one means we walked too far.
+    # In a dev layout, workspace is the parent of the repo (no hooks/) → correct.
+    if os.path.isdir(os.path.join(workspace, "hooks")):
+        # Overshot: workspace is actually the parent; the repo is one level deeper.
         return repo
     return workspace
 
