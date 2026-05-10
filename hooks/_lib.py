@@ -14,28 +14,35 @@ def get_repo_root(hook_file: str) -> str:
     The plugin is installed at <repo>/hooks/<hook>.py. We walk up three levels
     from __file__ to find the workspace root: hooks/ → repo/ → workspace/.
     When __file__ is absolute (Claude Code invokes hooks with absolute paths),
-    the naive dirname chain overshoots by one level, so we detect this by
-    checking whether the resolved workspace contains a 'hooks/' subdirectory.
+    the naive dirname chain overshoots by one level.
 
-    - Normal layout (plugin installed in workspace): repo = <workspace>/<plugin>/.
-      workspace = <workspace>/. If workspace has hooks/, we've walked too far
-      and the actual repo is one level deeper → return repo.
-    - Dev layout (plugin checked out directly): repo = workspace.
-      workspace = parent-of-repo, which lacks hooks/ → workspace is right.
+    Distinguishes the production layout (plugin installed as
+    <workspace>/<plugin>/) from the dev layout (plugin IS the workspace)
+    by checking whether the hook path places 'hooks/' as a direct
+    subdirectory of the workspace. In dev layout, the hook is at
+    <workspace>/hooks/<hook>.py so the relative path from workspace
+    to hook starts with 'hooks/'. In production, the relative path
+    starts with '<plugin>/hooks/' so does NOT start with 'hooks/'.
+
+    - Production layout: hook = <workspace>/<plugin>/hooks/<hook>.py
+      hook_relative = <plugin>/hooks/<hook>.py (doesn't start with 'hooks/')
+      → plugin repo is the workspace root → return repo.
+    - Dev layout: hook = <workspace>/hooks/<hook>.py
+      hook_relative = hooks/<hook>.py (starts with 'hooks/')
+      → workspace IS the repo → return workspace.
     """
     abs_hook = os.path.abspath(hook_file)
     parent = os.path.dirname(abs_hook)          # hooks/
     repo = os.path.dirname(parent)              # repo/
     workspace = os.path.dirname(repo)           # workspace/ (parent of repo)
 
-    # Detect overshoot by checking whether the resolved workspace contains
-    # a 'hooks/' subdirectory. In a normal install, the workspace is the parent
-    # of the plugin repo and has no hooks/; finding one means we walked too far.
-    # In a dev layout, workspace is the parent of the repo (no hooks/) → correct.
-    if os.path.isdir(os.path.join(workspace, "hooks")):
-        # Overshot: workspace is actually the parent; the repo is one level deeper.
-        return repo
-    return workspace
+    # Detect: is the workspace the repo? If the hook's relative path from
+    # workspace starts with 'hooks/', the workspace IS the repo (dev layout).
+    # Otherwise the plugin is a subdirectory of the workspace (production layout).
+    hook_relative = os.path.relpath(abs_hook, workspace)
+    if hook_relative.startswith("hooks/"):
+        return workspace   # dev layout: workspace IS the repo
+    return repo            # production layout: plugin is nested inside workspace
 
 
 def read_input() -> dict:
