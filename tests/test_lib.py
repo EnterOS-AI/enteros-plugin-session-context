@@ -114,3 +114,35 @@ class TestAddContext:
         with mock.patch("sys.stdout", stdout2):
             add_context("   ")
         assert stdout2.getvalue() == ""
+
+
+class TestGetRepoRoot:
+    """Tests for get_repo_root helper (imported from _lib)."""
+
+    def test_hooks_marker_present_returns_parent(self):
+        """When parent of hook has hooks/ subdir, that's the repo root."""
+        from _lib import get_repo_root
+
+        with mock.patch("os.path.isdir", return_value=True):
+            result = get_repo_root("/tmp/my-repo/hooks/session-start-context.py")
+            assert result == "/tmp/my-repo"
+
+    def test_hooks_marker_absent_returns_workspace(self):
+        """When parent of hook lacks hooks/ subdir, workspace is the repo root."""
+        from _lib import get_repo_root
+
+        with mock.patch("os.path.isdir", return_value=False):
+            result = get_repo_root("/tmp/my-repo/hooks/session-start-context.py")
+            assert result == os.path.dirname("/tmp/my-repo")
+
+    def test_real_repo_path_in_this_repo(self):
+        """Verify get_repo_root on the actual repo produces a valid repo root."""
+        from _lib import get_repo_root
+
+        # This test file is at: <repo>/tests/test_lib.py
+        # The hook is at: <repo>/hooks/session-start-context.py
+        hooks_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hooks")
+        hook_file = os.path.join(hooks_dir, "session-start-context.py")
+        result = get_repo_root(hook_file)
+        # Result must contain the hooks/ dir (it's the repo root)
+        assert os.path.isdir(os.path.join(result, "hooks"))

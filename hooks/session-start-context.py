@@ -6,9 +6,9 @@ import os
 import subprocess
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _lib import add_context, warn_to_stderr  # noqa
+from _lib import add_context, get_repo_root, warn_to_stderr  # noqa
 
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO = get_repo_root(__file__)
 LEARNINGS = os.path.expanduser(
     "~/.claude/projects/-Users-hongming-Documents-GitHub-molecule-monorepo/memory/cron-learnings.jsonl"
 )
