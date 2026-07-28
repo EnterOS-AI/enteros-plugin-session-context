@@ -1,0 +1,12 @@
+# Routing manifest read by the meta-CI router (molecule-ci scripts/meta-ci.py)
+# to derive this repo's CI capability-bundles. Without it the router exits
+# `rc=2 no repo-meta.yaml` BEFORE routing anything, which is why
+# plugin-manifest-validate covered 8 of 31 plugin repos rather than 31.
+#
+# Contents are DERIVED, not curated: `skills` iff skills/ exists,
+# `settings-fragment` iff settings-fragment.json exists. Verified against all 9
+# plugin repos that already carried this file — 9/9 consistent. molecule-ci#107.
+schema_version: 1
+layer: plugin
+capabilities:
+  - settings-fragment
