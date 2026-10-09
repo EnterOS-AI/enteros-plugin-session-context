@@ -1,17 +1,69 @@
-# CI — plugin validation via the canonical reusable workflow in molecule-ci.
+# CANONICAL consumer ci.yml for plugin repos — molecule-ai/molecule-ci SSOT.
 #
-# Consolidation (CI-reusables): the previous inline copy (git clone of
-# molecule-ci + inline validate-plugin.py run + inline secret-scan block)
-# is replaced by a native cross-repo reusable `uses:`. Removes per-repo
-# drift of the validate steps across the plugin fleet.
+# This is the file NEW plugin repos inherit. It standardizes the emitted
+# commit-status context to `CI / validate` (workflow `name: CI` + a job
+# whose status display-name is `validate`), so a single canonical
+# branch-protection required context — `CI / validate (pull_request)` —
+# works fleet-wide. See molecule-ci .gitea/workflows/bp-context-drift-gate.yml
+# and the design doc bp-drift-durable-fix.md for the drift root cause this
+# resolves (a BP-required context with no emitter = perma-pending = HTTP 405
+# merge-block forever).
 #
-# Cross-repo `uses:` resolves on Gitea 1.26.4 (app.ini
-# DEFAULT_ACTIONS_URL=self + runner GITHUB_SERVER_URL set). Proven green
-# on molecule-ai-plugin-molecule-careful-bash#15. Pinned to a molecule-ci
-# main SHA (reserved-path hygiene). Job id `validate` preserves the
-# required status context `CI / validate (pull_request)`.
+# WHY INLINE (not `uses: molecule-ai/molecule-ci/.gitea/workflows/...`):
+# cross-repo `uses:` (workflow_call) does NOT execute in Gitea Actions 1.26.4;
+# a consumer job can be recorded as successful without running the referenced
+# steps. The former remote definition was removed from active workflows.
+# This template instead INLINES the validate job: it anonymously fetches
+# the public molecule-ci SSOT at an immutable pin and runs the canonical validator
+# script directly. Same single-source-of-truth (the validator lives in
+# molecule-ci at a reviewed immutable pin), no cross-repo `uses:` dependency.
+#
+# When the Gitea deployment supports cross-repo reusable workflows, this
+# inline job can collapse back to a
+# `uses:` call WITHOUT changing the emitted `CI / validate` context.
+#
+# The SSOT is fetched under job-isolated RUNNER_TEMP so a consumer's tracked
+# `.molecule-ci/` compatibility surface is never overwritten or scanned.
+
 name: CI
-on: [push, pull_request]
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
 jobs:
   validate:
-    uses: molecule-ai/molecule-ci/.gitea/workflows/validate-plugin.yml@d8066f147da91072867973b9e0d867996b8a01fd
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MOLECULE_CI_REF: ce4f84f1c9851c3ee6a49a8d9862934dd9965c44
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v4
+      # Fetch the canonical validator from the public molecule-ci SSOT. A
+      # direct anonymous SHA fetch avoids cross-repo workflow/action resolution on
+      # Gitea 1.26.4 while still executing one canonical script implementation.
+      - name: Fetch immutable molecule-ci canonical scripts
+        run: |
+          test -n "${RUNNER_TEMP:-}"
+          CI_ROOT="$RUNNER_TEMP/molecule-ci-ssot"
+          mkdir "$CI_ROOT"
+          git init -q "$CI_ROOT"
+          git -C "$CI_ROOT" remote add origin \
+            https://git.moleculesai.app/molecule-ai/molecule-ci.git
+          git -C "$CI_ROOT" fetch -q --depth 1 origin "$MOLECULE_CI_REF"
+          git -C "$CI_ROOT" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$CI_ROOT" rev-parse HEAD)" = "$MOLECULE_CI_REF"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.11"
+      - run: pip install --break-system-packages pyyaml jsonschema -q
+      - name: Validate plugin contract
+        run: python3 "$RUNNER_TEMP/molecule-ci-ssot/.molecule-ci/scripts/validate-plugin.py"
+      - name: Check for secrets
+        run: python3 "$RUNNER_TEMP/molecule-ci-ssot/.molecule-ci/scripts/check-secrets.py"
